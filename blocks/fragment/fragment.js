@@ -1,16 +1,14 @@
-/*
- * Fragment Block
- * Include content on a page as a fragment.
- * https://www.aem.live/developer/block-collection/fragment
- */
+import { loadArea, getConfig } from '../../scripts/nx.js';
 
-import {
-  decorateMain,
-} from '../../scripts/scripts.js';
-
-import {
-  loadSections,
-} from '../../scripts/aem.js';
+function replaceDotMedia(path, doc) {
+  const resetAttributeBase = (tag, attr) => {
+    doc.querySelectorAll(`${tag}[${attr}^="./media_"]`).forEach((el) => {
+      el[attr] = new URL(el.getAttribute(attr), new URL(path, window.location)).href;
+    });
+  };
+  resetAttributeBase('img', 'src');
+  resetAttributeBase('source', 'srcset');
+}
 
 /**
  * Loads a fragment.
@@ -18,38 +16,40 @@ import {
  * @returns {HTMLElement} The root element of the fragment
  */
 export async function loadFragment(path) {
-  if (path && path.startsWith('/')) {
-    const resp = await fetch(`${path}.plain.html`);
-    if (resp.ok) {
-      const main = document.createElement('main');
-      main.innerHTML = await resp.text();
+  const { decorateArea } = getConfig();
 
-      // reset base path for media to fragment base
-      const resetAttributeBase = (tag, attr) => {
-        main.querySelectorAll(`${tag}[${attr}^="./media_"]`).forEach((elem) => {
-          elem[attr] = new URL(elem.getAttribute(attr), new URL(path, window.location)).href;
-        });
-      };
-      resetAttributeBase('img', 'src');
-      resetAttributeBase('source', 'srcset');
+  const resp = await fetch(`${path}.plain.html`);
+  if (!resp.ok) throw Error(`Couldn't fetch ${path}.plain.html`);
 
-      decorateMain(main);
-      await loadSections(main);
-      return main;
-    }
-  }
-  return null;
+  const html = await resp.text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  // Make embeded images cacheable
+  replaceDotMedia(path, doc);
+
+  const sections = doc.querySelectorAll('body > div');
+  const fragment = document.createElement('div');
+  fragment.classList.add('fragment-content');
+  fragment.append(...sections);
+
+  // Hydrate like a normal page
+  if (decorateArea) decorateArea({ area: fragment });
+  loadArea({ area: fragment });
+
+  return fragment;
 }
 
-export default async function decorate(block) {
-  const link = block.querySelector('a');
-  const path = link ? link.getAttribute('href') : block.textContent.trim();
+export default async function init(a) {
+  const path = a.getAttribute('href');
   const fragment = await loadFragment(path);
+
   if (fragment) {
-    const fragmentSection = fragment.querySelector(':scope .section');
-    if (fragmentSection) {
-      block.closest('.section').classList.add(...fragmentSection.classList);
-      block.closest('.fragment').replaceWith(...fragment.childNodes);
-    }
+    const defaultParent = a.closest('.default-content > *');
+    const defElToReplace = defaultParent || a;
+
+    const sections = fragment.querySelectorAll(':scope > section');
+    const content = sections.length > 1 ? fragment : fragment.querySelector('.section-content');
+
+    defElToReplace.parentElement.replaceChild(content, defElToReplace);
   }
 }
