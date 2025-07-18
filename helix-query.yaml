@@ -1,9 +1,14 @@
 auto-generated: true
 indices:
-  blog:
+  main:
     include:
-      - /blog/**
-    target: /blog/query-index.json
+      - /**
+    exclude:
+      - /blog**
+      - /fragments**
+      - /index
+      - /
+    target: /query-index.json
     properties:
       title:
         select: head > meta[property="og:title"]
@@ -21,14 +26,6 @@ indices:
         select: none
         value: |
           parseTimestamp(headers['last-modified'], 'ddd, DD MMM YYYY hh:mm:ss GMT')
-      featured:
-        select: head > meta[name="featured"]
-        value: |
-          attribute(el, "content")
-      author:
-        select: head > meta[name="author"]
-        value: |
-          attribute(el, "content")
       image:
         select: head > meta[property="og:image"]
         value: |
@@ -40,12 +37,3 @@ indices:
         select: head > meta[property="article:tag"]
         values: |
           attribute(el, 'content')
-  authors:
-    include:
-      - /author/**
-    target: /author/query-index.json
-    properties:
-      title:
-        select: head > meta[property="og:title"]
-        value: |
-          attribute(el, "content")
